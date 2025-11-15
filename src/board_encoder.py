@@ -3,14 +3,7 @@ import numpy as np
 
 def encode_board(board: chess.Board) -> np.ndarray:
     array = np.zeros((12,8,8), dtype=np.int8)
-    piece_to_index = {
-        chess.PAWN: 0,
-        chess.KNIGHT: 1,
-        chess.BISHOP: 2,
-        chess.ROOK: 3,
-        chess.QUEEN: 4,
-        chess.KING: 5
-    }   
+    
     for square, piece in board.piece_map().items():
         rank = chess.square_rank(square)
         file = chess.square_file(square)
