@@ -32,7 +32,7 @@ class ChessNet(nn.Module):
         self.conv4 = nn.Conv2d(128, 256, 3)
         self.res3 = ResBlock(256)
 
-        flat = 256 * 8 * 8
+        flat = 256 * 2 * 2
 
         #Value Head
         self.value_fc1 = nn.Linear(flat, 512)  
@@ -58,7 +58,7 @@ class ChessNet(nn.Module):
         x = x.view(x.size(0), -1)
     
         v = self.relu(self.value_fc1(x))
-        v = self.tanh(self.value_fc2(x))
+        v = self.tanh(self.value_fc2(v))
 
         p = self.relu(self.policy_f1(x))
         p = self.policy_f2(p)
