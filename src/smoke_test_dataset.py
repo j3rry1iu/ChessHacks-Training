@@ -6,7 +6,7 @@ from data.lichess_small_dataset import LichessSmallDataset
 
 def main():
     print("Loading HF slice (non-streaming)...")
-    hf_train = load_dataset("Lichess/standard-chess-games", split="train[:200]")
+    hf_train = load_dataset("Lichess/standard-chess-games", split="train[:1]")
 
     dataset = LichessSmallDataset(hf_train, max_moves_per_game=20, max_samples=1000)
     loader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0)

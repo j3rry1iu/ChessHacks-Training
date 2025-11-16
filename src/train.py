@@ -58,7 +58,7 @@ def train(
 
     # 1) Load streaming HF dataset
     print("[Train] Loading Lichess streaming dataset...")
-    hf_train = load_dataset("Lichess/standard-chess-games", streaming=True)["train"]
+    hf_train = load_dataset("Lichess/standard-chess-games", split ="train[:1]")
 
     # Optional shuffle for more variety (buffer_size controls randomness quality vs memory)
     hf_train = hf_train.shuffle(seed=42, buffer_size=10_000)

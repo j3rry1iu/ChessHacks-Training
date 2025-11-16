@@ -5,7 +5,7 @@ from data.lichess_stream_dataset import LichessGameStreamDataset
 
 def main():
     print("Loading Lichess HF dataset (streaming)...")
-    hf_train = load_dataset("Lichess/standard-chess-games", split="train[:200]")
+    hf_train = load_dataset("Lichess/standard-chess-games", split="train[:1]")
 
     # ⚠️ For debugging: do NOT shuffle here yet
     # hf_train = hf_train.shuffle(seed=42, buffer_size=1000)
