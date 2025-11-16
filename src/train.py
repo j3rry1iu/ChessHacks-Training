@@ -1,6 +1,7 @@
 import time
 import random
 from pathlib import Path
+import os
 
 import torch
 import torch.nn.functional as F
@@ -11,8 +12,15 @@ from models.chess_net import ChessNet
 from data.lichess_stream_dataset import LichessGameStreamDataset
 
 
-WEIGHTS_DIR = Path(__file__).resolve().parents[1] / "weights"
+# Directory to save weights. When running on Modal, it's common to mount a persistent volume
+# at /weights; if that exists use it. You can also set the environment variable
+# MODAL_WEIGHTS_PATH to point to a mounted directory. Otherwise default to repo/local.
+if "MODAL_WEIGHTS_PATH" in os.environ:
+    WEIGHTS_DIR = Path(os.environ["MODAL_WEIGHTS_PATH"])
+else:
+    WEIGHTS_DIR = Path(__file__).resolve().parents[1] / "weights"
 WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
+print(f"[Train] WEIGHTS_DIR={WEIGHTS_DIR}")
 
 
 def set_seed(seed: int = 42):
@@ -39,7 +47,7 @@ def save_checkpoint(model, optimizer, epoch, global_step, avg_loss, name: str):
 def train(
     epochs: int = 3,
     steps_per_epoch: int = 2000,
-    batch_size: int = 256,
+    batch_size: int = 12288,
     max_moves_per_game: int | None = 80,
     lr: float = 1e-3,
     min_elo: int = 2200,
@@ -60,25 +68,23 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[Train] Using device: {device}")
 
-    # 1) Load streaming HF dataset
     print("[Train] Loading Lichess streaming dataset...")
-    hf_train = load_dataset("Lichess/standard-chess-games", streaming=True)["train"]
-
-    # Optional: shuffle with buffer for more variety
+    hf_train = load_dataset("BolajiOlayinka/chess-masters-clean", streaming=True)["train"]
+    
     hf_train = hf_train.shuffle(seed=42, buffer_size=10_000)
 
-    # 2) Wrap in Elo-filtered streaming IterableDataset
     dataset = LichessGameStreamDataset(
         hf_dataset=hf_train,
         max_moves_per_game=max_moves_per_game,
         min_elo=min_elo,
     )
 
-    # 3) DataLoader over streaming dataset
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
-        num_workers=0,       # keep 0 for simplicity / easier debugging
+        num_workers=4,
+        persistent_workers=True,
+        prefetch_factor=4     
     )
 
     # 4) Model + optimizer
@@ -88,7 +94,22 @@ def train(
     global_step = 0
     best_loss = float("inf")
 
-    for epoch in range(1, epochs + 1):
+    # Resume support: if a checkpoint exists in WEIGHTS_DIR, load last.pt
+    start_epoch = 1
+    resume_path = WEIGHTS_DIR / "last.pt"
+    if resume_path.exists():
+        print(f"[Train] Found checkpoint {resume_path}, resuming...")
+        ckpt = torch.load(resume_path, map_location=device)
+        model.load_state_dict(ckpt["model_state"])
+        optimizer.load_state_dict(ckpt["optimizer_state"])
+        start_epoch = int(ckpt.get("epoch", 1)) + 1
+        global_step = int(ckpt.get("global_step", 0))
+        best_loss = float(ckpt.get("avg_loss", best_loss))
+        print(f"[Train] Resumed from epoch {start_epoch-1}, global_step={global_step}")
+    else:
+        print("[Train] No checkpoint found, starting from scratch.")
+
+    for epoch in range(start_epoch, epochs + 1):
         print(f"\n[Epoch {epoch}/{epochs}]")
         model.train()
 

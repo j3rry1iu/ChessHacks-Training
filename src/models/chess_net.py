@@ -64,4 +64,3 @@ class ChessNet(nn.Module):
         p = self.policy_f2(p)
         
         return p, v
-        
