@@ -1,16 +1,15 @@
-# src/train.py
-
-from pathlib import Path
 import time
 import random
+from pathlib import Path
 
 import torch
-from torch.utils.data import DataLoader
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 from datasets import load_dataset
 
 from models.chess_net import ChessNet
 from data.lichess_stream_dataset import LichessGameStreamDataset
+
 
 WEIGHTS_DIR = Path(__file__).resolve().parents[1] / "weights"
 WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -43,12 +42,17 @@ def train(
     batch_size: int = 256,
     max_moves_per_game: int | None = 80,
     lr: float = 1e-3,
+    min_elo: int = 2200,
 ):
     """
-    Train ChessNet on the Lichess HF streaming dataset.
+    Train ChessNet on Elo-filtered Lichess games using a streaming HF dataset.
 
-    epochs: how many passes over 'steps_per_epoch' batches
-    steps_per_epoch: how many gradient steps per epoch (since dataset is streaming)
+    - epochs:           number of epochs (logical passes of steps_per_epoch steps)
+    - steps_per_epoch:  how many gradient steps per epoch (since dataset is streaming)
+    - batch_size:       batch size for DataLoader
+    - max_moves_per_game: cap moves taken from each game (for speed)
+    - lr:               learning rate
+    - min_elo:          minimum Elo; games where BOTH players are < min_elo are skipped
     """
 
     set_seed(42)
@@ -58,16 +62,24 @@ def train(
 
     # 1) Load streaming HF dataset
     print("[Train] Loading Lichess streaming dataset...")
-    hf_train = load_dataset("Lichess/standard-chess-games", split ="train[:1]")
+    hf_train = load_dataset("Lichess/standard-chess-games", streaming=True)["train"]
 
-    # Optional shuffle for more variety (buffer_size controls randomness quality vs memory)
+    # Optional: shuffle with buffer for more variety
     hf_train = hf_train.shuffle(seed=42, buffer_size=10_000)
 
-    # 2) Wrap in our streaming IterableDataset
-    dataset = LichessGameStreamDataset(hf_train, max_moves_per_game=max_moves_per_game)
+    # 2) Wrap in Elo-filtered streaming IterableDataset
+    dataset = LichessGameStreamDataset(
+        hf_dataset=hf_train,
+        max_moves_per_game=max_moves_per_game,
+        min_elo=min_elo,
+    )
 
     # 3) DataLoader over streaming dataset
-    dataloader = DataLoader(dataset, batch_size=batch_size)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        num_workers=0,       # keep 0 for simplicity / easier debugging
+    )
 
     # 4) Model + optimizer
     model = ChessNet().to(device)
@@ -84,14 +96,13 @@ def train(
         steps_in_epoch = 0
 
         data_iter = iter(dataloader)
-
         start_time = time.time()
 
         for step in range(steps_per_epoch):
             try:
                 x, policy_target, value_target = next(data_iter)
             except StopIteration:
-                # Streaming dataset can be re-wrapped
+                # Recreate iterator if we exhaust the stream (unlikely with streaming)
                 data_iter = iter(dataloader)
                 x, policy_target, value_target = next(data_iter)
 
@@ -133,18 +144,24 @@ def train(
         # Optional: per-epoch snapshot
         # save_checkpoint(model, optimizer, epoch, global_step, avg_epoch_loss, f"epoch_{epoch}.pt")
 
-    # Also save plain state_dict for engine use
+    # Save plain state_dict for inference
     state_dict_path = WEIGHTS_DIR / "chess_net_state_dict.pt"
     torch.save(model.state_dict(), state_dict_path)
     print(f"[Train] Saved final state_dict to {state_dict_path}")
+    print(f"[Train] Best avg epoch loss={best_loss:.4f}")
 
 
-if __name__ == "__main__":
-    # Tune these for Modal vs local testing
+def main():
+    # Defaults are reasonable for a first Modal run; you can tune them
     train(
-        epochs=3,            # more on Modal, fewer locally
-        steps_per_epoch=2000,
+        epochs=3,
+        steps_per_epoch=3000,
         batch_size=256,
         max_moves_per_game=80,
         lr=1e-3,
+        min_elo=2200,  # 👈 only games where at least one player is >= 2200 Elo
     )
+
+
+if __name__ == "__main__":
+    main()
