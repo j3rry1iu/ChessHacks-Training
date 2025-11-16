@@ -1,3 +1,6 @@
+"""
+Train on Elite Chess Games (Magnus Carlsen and other 2600+ players)
+"""
 import time
 import random
 from pathlib import Path
@@ -9,12 +12,10 @@ from torch.utils.data import DataLoader
 from datasets import load_dataset
 
 from models.chess_net import ChessNet
-from data.lichess_stream_dataset import LichessGameStreamDataset
+from data.elite_chess_dataset import EliteChessDataset
 
 
-# Directory to save weights. When running on Modal, it's common to mount a persistent volume
-# at /weights; if that exists use it. You can also set the environment variable
-# MODAL_WEIGHTS_PATH to point to a mounted directory. Otherwise default to repo/local.
+# Directory to save weights
 if "MODAL_WEIGHTS_PATH" in os.environ:
     WEIGHTS_DIR = Path(os.environ["MODAL_WEIGHTS_PATH"])
 else:
@@ -45,20 +46,16 @@ def save_checkpoint(model, optimizer, epoch, global_step, avg_loss, name: str):
 
 
 def train(
-    epochs: int = 3,
+    epochs: int = 10,
     batch_size: int = 256,
     max_moves_per_game: int | None = 80,
     lr: float = 1e-3,
-    max_steps_per_epoch: int | None = None,  # Optional limit, None = full dataset
+    max_steps_per_epoch: int | None = None,
+    min_avg_elo: int = 2600,
+    player_filter: str | None = None,  # e.g., "Carlsen"
 ):
     """
-    Train ChessNet on Lichess games using a streaming HF dataset.
-
-    - epochs:           number of epochs (full passes through dataset)
-    - batch_size:       batch size for DataLoader
-    - max_moves_per_game: cap moves taken from each game (for speed)
-    - lr:               learning rate
-    - max_steps_per_epoch: optional limit on steps per epoch (None = process full dataset)
+    Train ChessNet on Elite Chess Games.
     """
 
     set_seed(42)
@@ -66,16 +63,15 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[Train] Using device: {device}")
 
-    print("[Train] Loading Lichess streaming dataset...")
-    hf_train = load_dataset("Lichess/standard-chess-games", streaming=True)["train"]
-    
-    # Skip shuffle for now to debug
-    # hf_train = hf_train.shuffle(seed=42, buffer_size=1000)
+    print("[Train] Loading Elite Chess Games dataset...")
+    hf_train = load_dataset("Q-bert/Elite-Chess-Games", streaming=True, split="train")
 
-    print("[Train] Creating dataset wrapper...")
-    dataset = LichessGameStreamDataset(
+    print(f"[Train] Creating dataset wrapper (min_elo={min_avg_elo}, player_filter={player_filter})...")
+    dataset = EliteChessDataset(
         hf_dataset=hf_train,
         max_moves_per_game=max_moves_per_game,
+        min_avg_elo=min_avg_elo,
+        player_filter=player_filter,
     )
 
     print("[Train] Creating DataLoader...")
@@ -85,7 +81,6 @@ def train(
         num_workers=1,
     )
 
-    # 4) Model + optimizer
     print("[Train] Initializing model...")
     model = ChessNet().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -93,7 +88,7 @@ def train(
     global_step = 0
     best_loss = float("inf")
 
-    # Resume support: check for last.pt or best.pt
+    # Resume support
     start_epoch = 1
     resume_path = WEIGHTS_DIR / "last.pt"
     if not resume_path.exists():
@@ -142,12 +137,12 @@ def train(
             if step == 0:
                 print(f"[Epoch {epoch}] First batch received: x.shape={x.shape}")
 
-            x = x.to(device)                         # (B, 12, 8, 8)
-            policy_target = policy_target.to(device) # (B,)
-            value_target = value_target.to(device)   # (B,)
+            x = x.to(device)
+            policy_target = policy_target.to(device)
+            value_target = value_target.to(device)
 
-            policy_logits, values = model(x)         # (B, NUM_MOVES), (B, 1)
-            values = values.squeeze(-1)              # (B,)
+            policy_logits, values = model(x)
+            values = values.squeeze(-1)
 
             policy_loss = F.cross_entropy(policy_logits, policy_target)
             value_loss = F.mse_loss(values, value_target)
@@ -178,9 +173,6 @@ def train(
             best_loss = avg_epoch_loss
             save_checkpoint(model, optimizer, epoch, global_step, avg_epoch_loss, "best.pt")
 
-        # Optional: per-epoch snapshot
-        # save_checkpoint(model, optimizer, epoch, global_step, avg_epoch_loss, f"epoch_{epoch}.pt")
-
     # Save plain state_dict for inference
     state_dict_path = WEIGHTS_DIR / "chess_net_state_dict.pt"
     torch.save(model.state_dict(), state_dict_path)
@@ -189,13 +181,15 @@ def train(
 
 
 def main():
-    # Train through full dataset for multiple epochs
+    # Train on Magnus Carlsen games (elite 2600+ Elo)
     train(
-        epochs=5,  # Process full dataset 5 times
+        epochs=10,
         batch_size=256,
         max_moves_per_game=80,
         lr=1e-3,
-        max_steps_per_epoch=None,  # No limit - process full dataset
+        max_steps_per_epoch=None,  # Process full dataset
+        min_avg_elo=2600,
+        player_filter="Carlsen",  # Only Magnus Carlsen games
     )
 
 
