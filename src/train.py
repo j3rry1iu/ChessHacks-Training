@@ -191,7 +191,7 @@ def train(
 def main():
     # Train through full dataset for multiple epochs
     train(
-        epochs=5,  # Process full dataset 5 times
+        epochs=45,  
         batch_size=256,
         max_moves_per_game=80,
         lr=1e-3,
