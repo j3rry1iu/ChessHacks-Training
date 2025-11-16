@@ -1,5 +1,5 @@
 from torch.utils.data import DataLoader
-from data.local_pgn_dataset import LocalPGNDataset
+from data.local_pgn_data import LocalPGNDataset
 
 def main():
     #  CHANGE THIS LINE ONLY 

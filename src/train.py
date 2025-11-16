@@ -159,7 +159,7 @@ def main():
         batch_size=256,
         max_moves_per_game=80,
         lr=1e-3,
-        min_elo=2200,  # 👈 only games where at least one player is >= 2200 Elo
+        min_elo=2200, 
     )
 
 

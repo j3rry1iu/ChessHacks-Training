@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from models.chess_net import ChessNet
-from data.local_pgn_dataset import LocalPGNDataset
+from data.local_pgn_data import LocalPGNDataset
 
 
 # -------------------------
