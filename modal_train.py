@@ -27,9 +27,10 @@ volume = modal.Volume.from_name("chessbot-weights", create_if_missing=True)
     image=image,
     gpu="T4",
     timeout=60 * 60 * 3,
-    volumes={"/root/app/weights": weights_vol, "/weights": volume},
+    #volumes={"/root/app/weights": weights_vol, "/weights": volume},
+    volumes={"/weights": volume},
     env={"MODAL_WEIGHTS_PATH": "/weights"},
-    secrets=[modal.Secret.from_name("huggingface-secret-2")]
+    #secrets=[modal.Secret.from_name("huggingface-secret-2")]
 )
 
 def run_training():

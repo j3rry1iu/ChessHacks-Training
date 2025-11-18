@@ -47,9 +47,10 @@ def save_checkpoint(model, optimizer, epoch, global_step, avg_loss, name: str):
 def train(
     epochs: int = 3,
     batch_size: int = 256,
-    max_moves_per_game: int | None = 80,
+    max_moves_per_game: int | None = None,
     lr: float = 1e-3,
     max_steps_per_epoch: int | None = None,  # Optional limit, None = full dataset
+    #min_elo: int = 2200,
 ):
     """
     Train ChessNet on Lichess games using a streaming HF dataset.
@@ -67,15 +68,16 @@ def train(
     print(f"[Train] Using device: {device}")
 
     print("[Train] Loading Lichess streaming dataset...")
-    hf_train = load_dataset("Lichess/standard-chess-games", streaming=True)["train"]
+    hf_train = load_dataset("angeluriot/chess_games", streaming=True)["train"]
     
     # Skip shuffle for now to debug
-    # hf_train = hf_train.shuffle(seed=42, buffer_size=1000)
+    hf_train = hf_train.shuffle(seed=42, buffer_size=200000)
 
     print("[Train] Creating dataset wrapper...")
     dataset = LichessGameStreamDataset(
         hf_dataset=hf_train,
         max_moves_per_game=max_moves_per_game,
+        #min_elo=min_elo, 
     )
 
     print("[Train] Creating DataLoader...")
@@ -102,7 +104,7 @@ def train(
     print(f"[Train] Checking for checkpoint at {resume_path}...")
     if resume_path.exists():
         print(f"[Train] Found checkpoint {resume_path}, resuming...")
-        ckpt = torch.load(resume_path, map_location=device)
+        ckpt = torch.load(resume_path, map_location=device, weights_only=True)
         model.load_state_dict(ckpt["model_state"])
         optimizer.load_state_dict(ckpt["optimizer_state"])
         start_epoch = int(ckpt.get("epoch", 1)) + 1
@@ -191,11 +193,12 @@ def train(
 def main():
     # Train through full dataset for multiple epochs
     train(
-        epochs=45,  
-        batch_size=256,
-        max_moves_per_game=80,
+        epochs=50,  
+        batch_size=1024,
+        max_moves_per_game=None,
         lr=1e-3,
-        max_steps_per_epoch=None,  # No limit - process full dataset
+        max_steps_per_epoch=15000,  # No limit - process full dataset
+        #min_elo=2200,
     )
 
 
