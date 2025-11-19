@@ -1,12 +1,17 @@
+import os
 from huggingface_hub import HfApi
+import getpass
 
 # --- CONFIGURATION ---
-REPO_ID = "HamzaAmmar/chesshacks-model"
+REPO_ID = "HamzaAmmar/chesshacks-model" # Or your username if you switched
 LOCAL_FILE = "weights/best.pt"
 REMOTE_FILENAME = "best.pt"
 
-# YOUR NEW WRITE TOKEN
-HF_TOKEN = "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"
+# SECURE: Ask for token at runtime OR get from environment
+HF_TOKEN = os.getenv("HF_TOKEN")
+if HF_TOKEN is None:
+    print("🔑 Enter your Hugging Face Write Token (hidden input):")
+    HF_TOKEN = getpass.getpass()
 # ---------------------
 
 print(f"🚀 Uploading {LOCAL_FILE} to {REPO_ID}...")
