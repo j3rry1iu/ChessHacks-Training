@@ -26,7 +26,7 @@ volume = modal.Volume.from_name("chessbot-weights", create_if_missing=True)
 @app.function(
     image=image,
     gpu="T4",
-    timeout=60 * 60 * 3,
+    timeout=60 * 60 * 24,
     #volumes={"/root/app/weights": weights_vol, "/weights": volume},
     volumes={"/weights": volume},
     env={"MODAL_WEIGHTS_PATH": "/weights"},
